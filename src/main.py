@@ -7,6 +7,10 @@ import xml.etree.ElementTree as ET
 from ast import literal_eval
 from collections import defaultdict
 from math import sqrt
+import logging
+import time
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 def read_configuration_file(file_path):
     instructions = {}
@@ -27,6 +31,7 @@ def process_queries(xml_file, output_processed_queries, output_expected_results)
     root = tree.getroot()
 
     # Processar cada consulta
+    logging.info("\nProcessando cada Consulta")
     for raw_query in root.iter('QUERY'):
         query_number = None
         query_text = None
@@ -47,6 +52,7 @@ def process_queries(xml_file, output_processed_queries, output_expected_results)
             queries[int(query_number)] = {'text': query_text, 'results': query_results}
 
     # Gravar consultas processadas em CSV
+    logging.info("\nGravando Consultas Processadas em CSV - Arquivo %s", output_processed_queries)
     with open(output_processed_queries, 'w') as processed_queries_file:
         processed_queries_file.write('QueryNumber;QueryText\n')
         for query_number, query_data in queries.items():
@@ -54,6 +60,7 @@ def process_queries(xml_file, output_processed_queries, output_expected_results)
             processed_queries_file.write(f'{query_number};"{query_text}"\n')
 
     # Resultados esperados em CSV
+    logging.info("\nGravando Resultados Esperados em CSV - Arquivo %s", output_expected_results)
     with open(output_expected_results, 'w') as expected_results_file:
         expected_results_file.write('QueryNumber;DocNumber;DocScore\n')
         for query_number, query_data in queries.items():
@@ -70,6 +77,7 @@ def read_inverted_list_config(file_path):
     return instructions
 
 def process_xml_files(xml_files):
+    logging.info("\nProcessando Arquivos XML\n")
     documents = {}
     for xml_file in xml_files:
         tree = ET.parse(xml_file)
@@ -80,9 +88,11 @@ def process_xml_files(xml_files):
             extract = record.find('EXTRACT')
             abstract_text = abstract.text if abstract is not None else extract.text if extract is not None else ""
             documents[record_num] = word_tokenize(abstract_text)
+        logging.info("Arquivo %s Processado", xml_file)
     return documents
 
 def generate_inverted_list(data, stop_words):
+    logging.info("\nGerando Lista Invertida")
     inverted_list = {}
     for record_num, abstract_text in data.items():
         if isinstance(abstract_text, list):
@@ -120,6 +130,7 @@ def read_inverted_list(file_path):
     return inverted_list
 
 def process_inverted_list(inverted_list):
+    logging.info("\nIndexando a Lista Invertida")
     vector_model = {}
 
     # Número total de documentos
@@ -154,6 +165,8 @@ def process_inverted_list(inverted_list):
 
         # Armazenando IDF e pesos de documentos para o termo atual no modelo
         vector_model[term] = (idf, document_data)
+    
+    logging.info("\nIndexador Segundo o Modelo Vetorial Gerado")
     return vector_model
 
 def write_vector_model(vector_model, output_file):
@@ -166,6 +179,7 @@ def write_vector_model(vector_model, output_file):
             writer.writerow({'word': term, 'data': document_data})
 
 def load_inverted_list(file_path):
+    logging.info("\nCarregando Lista Invertida - Leitura do CSV")
     inverted_list = {}
     with open(file_path, 'r') as file:
         reader = csv.reader(file, delimiter=';')
@@ -177,6 +191,7 @@ def load_inverted_list(file_path):
     return inverted_list
 
 def load_vector_model(file_path):
+    logging.info("\nCarregando Modelo Vetorial - Leitura CSV")
     vector_model = defaultdict(list)
     
     with open(file_path, 'r') as file:
@@ -195,6 +210,7 @@ def load_vector_model(file_path):
     return vector_model
 
 def load_queries(file_path):
+    logging.info("\nCarregando Consultas (Queries) - Leitura CSV")
     queries = defaultdict(list)
     with open(file_path, 'r') as file:
         # Ler linhas do arquivo
@@ -239,6 +255,7 @@ def calculate_similarity(query, doc_vector):
     return 0
 
 def perform_search(vector_model, queries):
+    logging.info("\nRealizando a Busca - Resposta Encontrada p/ Consulta")
     search_results = []
     for i, query in enumerate(queries, start=1):
         query_results = []
@@ -258,7 +275,16 @@ def write_search_results(results, output_file):
               
 
 def main():
+    logging.info("\nIniciando Implementação do Sistema de Recuperação em Memória Segundo Modelo Vetorial.")
+    
+    logging.info("\n\n\n-------------------------------------------------------------------------\n\n")
+    
     # Processador de Consultas
+    logging.info("\nInício Módulo Processador de Consultas")
+    # Registra o tempo de início
+    start_time = time.time()
+
+    logging.info("\nLeitura do arquivo de configurações - pc.cfg")
     current_directory = os.getcwd()
     config_file = 'pc.cfg'
     config = read_configuration_file(current_directory + '\\src\\' + config_file)
@@ -268,8 +294,19 @@ def main():
     expected_results_output = config['ESPERADOS']
 
     process_queries(current_directory + '\\data\\' + xml_file, current_directory + '\\RESULT\\' + processed_queries_output, current_directory + '\\RESULT\\' + expected_results_output)
+    # Registra o tempo de término
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logging.info("\nTempo de Execução: %s segundos", math.ceil(execution_time))
+    logging.info("\nFim Módulo Processador de Consultas")
+    
+    logging.info("\n\n\n-------------------------------------------------------------------------\n\n")
 
     # Gerador de Lista Invertida
+    logging.info("\nInício Módulo Gerador Lista Invertida")
+    # Registra o tempo de início
+    start_time = time.time()
+    logging.info("\nLeitura do arquivo de configurações - gli.cfg")
     inverted_list_config_file = 'gli.cfg'
     inverted_list_config = read_inverted_list_config(os.path.join(current_directory, 'src', inverted_list_config_file))
     xml_files = inverted_list_config['LEIA'].split(', ')
@@ -277,13 +314,29 @@ def main():
 
     xml_data = process_xml_files([os.path.join(current_directory, file) for file in xml_files])
     
+    logging.info("\nCarregando lista de Stop Words")
     # Carregar stop words
     stop_words = load_stop_words(os.path.join(current_directory, 'stopwords.txt'))
+    logging.info("\n%s Stop Words Carregadas", len(stop_words))
     
     inverted_list = generate_inverted_list(xml_data, stop_words)
+    logging.info("\nGravando Lista Invertida em CSV - Arquivo %s", os.path.join(current_directory, output_file))
     write_inverted_list_to_csv(inverted_list, os.path.join(current_directory, output_file))
     
+    # Registra o tempo de término
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logging.info("\nTempo de Execução: %s segundos", math.ceil(execution_time))
+    logging.info("\nFim Módulo Gerador Lista Invertida")
+    
+    logging.info("\n\n\n-------------------------------------------------------------------------\n\n")
+    
     # Indexador
+    logging.info("\nInício Módulo Indexador")
+    # Registra o tempo de início
+    start_time = time.time()
+    
+    logging.info("\nLeitura do arquivo de configurações - index.cfg")
     current_directory = os.getcwd()
     index_config_file = 'index.cfg'
     index_config = read_configuration_file(os.path.join(current_directory, 'src', index_config_file))
@@ -295,9 +348,22 @@ def main():
     
     # Indexar a lista invertida e salvar o modelo vetorial
     vector_model_index = process_inverted_list(inverted_list)
+    logging.info("\nGravando Modelo Vetorial em CSV - Arquivo %s", os.path.join(current_directory, output_file))
     write_vector_model(vector_model_index, os.path.join(current_directory, output_file))
+    # Registra o tempo de término
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logging.info("\nTempo de Execução: %s segundos", math.ceil(execution_time))
+    logging.info("\nFim Módulo Indexador")
+    
+    logging.info("\n\n\n-------------------------------------------------------------------------\n\n")
     
     #Buscador
+    logging.info("\nInício Módulo Buscador")
+    # Registra o tempo de início
+    start_time = time.time()
+    
+    logging.info("\nLeitura do arquivo de configurações - busca.cfg")
     search_config_file = 'busca.cfg'
     search_config = read_configuration_file(os.path.join(current_directory, 'src', search_config_file))
 
@@ -315,7 +381,13 @@ def main():
     search_results = perform_search(vector_model, queries)
 
     # Escrever resultados
+    logging.info("\nGravando RESULTADOS em CSV")
     write_search_results(search_results, os.path.join(current_directory, results_file))
+    # Registra o tempo de término
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logging.info("\nTempo de Execução: %s segundos", math.ceil(execution_time))
+    logging.info("\nFim Módulo Buscador\n\n\n")
     
 
 if __name__ == "__main__":
