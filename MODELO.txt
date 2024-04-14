@@ -1,0 +1,20 @@
+Formato do Modelo Vetorial:
+
+1. Estrutura geral do modelo vetorial:
+   - O modelo vetorial é representado por uma estrutura de dados que associa cada palavra (ou termo) a um conjunto de dados relacionados aos documentos nos quais essa palavra aparece.
+
+2. Formato de cada entrada no modelo vetorial:
+   - Cada entrada no modelo vetorial é composta por uma palavra (representada pela chave) e um conjunto de dados associados a essa palavra (representado pelo valor).
+
+3. Formato dos dados associados a cada palavra:
+   - Os dados associados a cada palavra são representados por um dicionário em Python.
+   - Cada chave no dicionário representa o identificador de um documento no qual a palavra ocorre.
+   - Cada valor associado à chave é um número que representa a relevância da palavra nesse documento.
+
+4. Interpretação dos valores:
+   - Os valores associados a cada documento representam a importância da palavra nesse documento, calculada usando o esquema tf/idf (indexador utilizando o tf/idf padrão).
+   - Quanto maior o valor, mais relevante é a palavra para o documento.
+
+5. Exemplo de entrada no modelo vetorial:
+   - Por exemplo, a entrada para a palavra "SIGNIFICANCE" é {1: 0.14786164683666028, 258: 0.14786164683666028, 526: 0.14786164683666028, ...}.
+   - Isso indica que a palavra "SIGNIFICANCE" ocorre em vários documentos, com diferentes níveis de relevância em cada documento.
