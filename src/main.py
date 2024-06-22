@@ -271,7 +271,9 @@ def write_search_results(results, output_file):
         csv_writer = csv.writer(csvfile, delimiter=';')
         for query_id, query_results in results:
             for position, (similarity, doc_id) in enumerate(query_results, start=1):
-                csv_writer.writerow([query_id, [position, doc_id, similarity]])
+                # Formatando o campo DocID como uma string
+                doc_id_str = f"[{position}, {doc_id}, {similarity}]"
+                csv_writer.writerow([query_id, doc_id_str])
               
 
 def main():
