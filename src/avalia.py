@@ -3,158 +3,136 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nltk.stem import PorterStemmer
 from sklearn.metrics import precision_recall_curve, f1_score, precision_score, recall_score, average_precision_score
-
+import ast  # Para lidar com a conversão de strings para lista
 import os
 
+# Configurações de diretório e arquivos
 current_directory = os.getcwd()
-output_directory = os.path.join(current_directory, 'AVALIA')
-
-# Criar diretório AVALIA se não existir
-if not os.path.exists(output_directory):
-    os.makedirs(output_directory)
+resultados_file = os.path.join(current_directory, 'RESULT', 'RESULTADOS.csv')
+resultados_esperados_file = os.path.join(current_directory, 'RESULT', 'expected_results.csv')
 
 # Carregar dados
-resultados = pd.read_csv(os.path.join(current_directory, 'RESULT', 'RESULTADOS.csv'), delimiter=';', header=None, names=['Query', 'DocID', 'Score'])
-resultados_esperados = pd.read_csv(os.path.join(current_directory, 'RESULT', 'expected_results.csv'), delimiter=';')
+resultados = pd.read_csv(resultados_file, delimiter=';', header=None)
+resultados_esperados = pd.read_csv(resultados_esperados_file, delimiter=';', header=None)
+
+# Leitura da opção do stemmer do arquivo de configuração
+config_file = current_directory + '\\src\\config.txt'
+if os.path.exists(config_file):
+    with open(config_file, 'r') as f:
+        stemmer_choice = f.readline().strip()  # Ler a primeira linha e remover espaços em branco
+else:
+    stemmer_choice = "STEMMER"  # Se o arquivo de configuração não existir, use STEMMER por padrão
 
 # Configuração do Stemmer
-use_stemmer = True  # Defina como False para NOSTEMMER
+use_stemmer = True if stemmer_choice == "STEMMER" else False
+stemmer = PorterStemmer() if use_stemmer else None  # Garantir que stemmer seja instanciado corretamente
 
-# Inicializar Stemmer de Porter
-stemmer = PorterStemmer() if use_stemmer else None
-
+# Função para pré-processamento dos dados
 def preprocess(text, stemmer=None):
-    # Tokenização e stemming (se aplicável)
-    tokens = text.lower().split()
-    if stemmer:
-        tokens = [stemmer.stem(token) for token in tokens]
-    return tokens
+    try:
+        results_list = ast.literal_eval(text)
+        if isinstance(results_list, list):
+            if stemmer:
+                return [(0, 0, stemmer.stem(str(score))) for score in results_list]
+            else:
+                return [(0, 0, str(score)) for score in results_list]
+        else:
+            if stemmer:
+                return [(0, 0, stemmer.stem(str(text)))]
+            else:
+                return [(0, 0, str(text))]
+    except (SyntaxError, ValueError):
+        if stemmer:
+            return [(0, 0, stemmer.stem(str(text)))]
+        else:
+            return [(0, 0, str(text))]
 
-# Funções de avaliação
+# Aplicar pré-processamento aos resultados
+resultados['Processed'] = resultados[1].apply(preprocess, stemmer=stemmer)
 
-def calcular_11_pontos_precisao_recall(resultados, esperados):
-    # Verificar e remover NaNs
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    
-    precisions, recalls, _ = precision_recall_curve(esperados, resultados)
-    recall_levels = np.linspace(0, 1, 11)
-    precision_at_recall = [max(precisions[recalls >= recall]) for recall in recall_levels]
-    
-    plt.plot(recall_levels, precision_at_recall, marker='o')
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.title('11-Point Precision-Recall Curve')
-    plt.savefig(os.path.join(output_directory, '11_pontos_precisao_recall.pdf'))
-    plt.show()
-    return precision_at_recall, recall_levels
+# Preparar dados para avaliação
+resultados_flat = resultados.explode('Processed').reset_index(drop=True)
+resultados_flat[['Posicao', 'DocNumber', 'DocScore']] = pd.DataFrame(resultados_flat['Processed'].tolist(), index=resultados_flat.index)
+resultados_flat = resultados_flat.drop(['Processed', 0, 1], axis=1)
 
-def calcular_f1(resultados, esperados):
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    f1 = f1_score(esperados, resultados, zero_division=1)
-    return f1
+# Unir resultados com esperados
+# Renomear as colunas para os nomes corretos
+resultados_esperados.columns = ['QueryNumber', 'Esperado', 'DocScore']
 
-def calcular_precision_at_k(resultados, esperados, k):
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    precision_at_k = precision_score(esperados[:k], resultados[:k], zero_division=1)
-    return precision_at_k
+# Eliminar a primeira linha que contém cabeçalhos
+resultados_esperados = resultados_esperados.iloc[1:]  # Seleciona todas as linhas a partir da segunda
 
-def calcular_r_precision(resultados, esperados):
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    r = sum(esperados)
-    r_precision = precision_score(esperados[:r], resultados[:r], zero_division=1)
-    return r_precision
+# Converter 'QueryNumber' para int64
+resultados_esperados['QueryNumber'] = resultados_esperados['QueryNumber'].astype('int64')
 
-def calcular_map(resultados, esperados):
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    map_score = average_precision_score(esperados, resultados)
-    return map_score
+# Agrupar resultados_flat por QueryNumber
+resultados_flat_grouped = resultados_flat.groupby('Posicao')  # Ajuste aqui conforme a estrutura dos seus dados
 
-def calcular_mrr(resultados, esperados):
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    for i, result in enumerate(resultados):
-        if result in esperados:
-            return 1 / (i + 1)
-    return 0
+# Inicializar listas para armazenar métricas
+precision_recall_stemmer_all = []
+f1_stemmer_all = []
+precision5_stemmer_all = []
+precision10_stemmer_all = []
+r_precision_stemmer_all = []
+map_score_stemmer_all = []
 
-def calcular_dcg(resultados, esperados):
-    resultados = np.nan_to_num(resultados)
-    esperados = np.nan_to_num(esperados)
-    dcg = 0.0
-    for i, result in enumerate(resultados):
-        if result in esperados:
-            dcg += 1 / np.log2(i + 2)
-    return dcg
+# Iterar sobre cada grupo de resultados por QueryNumber
+for query, group_flat in resultados_flat_grouped:
+    # Verificar se há resultados esperados para essa query
+    if query in resultados_esperados['QueryNumber'].values:
+        # Filtrar resultados esperados pela QueryNumber atual
+        group_esperados = resultados_esperados[resultados_esperados['QueryNumber'] == query]['DocScore']
+        
+        # Verificar se há dados suficientes para calcular métricas
+        if len(group_flat) > 0 and len(group_esperados) > 0:
+            # Calcular métricas para o grupo atual
+            precision_recall_stemmer = precision_recall_curve(group_esperados, group_flat['DocScore'])
+            f1_stemmer = f1_score(group_esperados, group_flat['DocScore'])
+            precision5_stemmer = precision_score(group_esperados, group_flat['DocScore'], pos_label=1, average='binary', k=5)
+            precision10_stemmer = precision_score(group_esperados, group_flat['DocScore'], pos_label=1, average='binary', k=10)
+            r_precision_stemmer = r_precision_score(group_esperados, group_flat['DocScore'])
+            map_score_stemmer = average_precision_score(group_esperados, group_flat['DocScore'])
+            
+            # Armazenar métricas calculadas
+            precision_recall_stemmer_all.append(precision_recall_stemmer)
+            f1_stemmer_all.append(f1_stemmer)
+            precision5_stemmer_all.append(precision5_stemmer)
+            precision10_stemmer_all.append(precision10_stemmer)
+            r_precision_stemmer_all.append(r_precision_stemmer)
+            map_score_stemmer_all.append(map_score_stemmer)
+        else:
+            print(f"Dados insuficientes para calcular métricas para a Query {query}")
 
-def calcular_ndcg(resultados, esperados):
-    dcg = calcular_dcg(resultados, esperados)
-    idcg = calcular_dcg(sorted(esperados, reverse=True), esperados)
-    ndcg = dcg / idcg if idcg > 0 else 0.0
-    return ndcg
+# Calcular métricas médias se necessário
+# Exemplo de cálculo de média de precision_recall_stemmer_all:
+if len(precision_recall_stemmer_all) > 0:
+    precision_recall_stemmer_avg = np.mean(precision_recall_stemmer_all, axis=0)
 
-# Normalizar scores
-resultados['Score'] = resultados['Score'] / resultados['Score'].max()
+    # Verifique se precision_recall_stemmer_avg contém valores válidos antes de plotar
+    if isinstance(precision_recall_stemmer_avg, tuple) and len(precision_recall_stemmer_avg) > 1:
+        # Gerar relatório em Markdown ou utilizar os resultados conforme necessário
+        # Exemplo:
+        with open('RELATORIO.MD', 'w') as f:
+            f.write("# Avaliação do Sistema de Recuperação de Informação\n\n")
+            
+            f.write("## Resultados com Stemmer\n")
+            f.write(f"- **F1 Score:** {np.mean(f1_stemmer_all)}\n")
+            f.write(f"- **Precision@5:** {np.mean(precision5_stemmer_all)}\n")
+            f.write(f"- **Precision@10:** {np.mean(precision10_stemmer_all)}\n")
+            f.write(f"- **R-Precision:** {np.mean(r_precision_stemmer_all)}\n")
+            f.write(f"- **MAP:** {np.mean(map_score_stemmer_all)}\n")
 
-# Corrigir formato dos dados em 'DocID'
-resultados['DocID'] = resultados['DocID'].apply(lambda x: int(eval(x)[1]) if isinstance(x, str) else x)
+        # Gráfico de Precisão-Recall
+        plt.plot(precision_recall_stemmer_avg[1], precision_recall_stemmer_avg[0], marker='o')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('11-Point Precision-Recall Curve')
+        plt.savefig(f'11pontos-{stemmer_choice.lower()}.pdf')
+        plt.show()
+    else:
+        print("Não há dados suficientes para gerar a curva de precisão-recall.")
+else:
+    print("Não há dados suficientes para calcular métricas.")
 
-# Avaliação e geração de relatórios
-resultados_esperados_bin = [1 if doc in resultados_esperados['DocNumber'].values else 0 for doc in resultados['DocID']]
-
-# Verificar se existem classes positivas em resultados_esperados_bin
-print("Unique values in resultados_esperados_bin:", np.unique(resultados_esperados_bin))
-
-# Verificar se existem documentos em resultados que correspondem aos esperados
-print("Unique DocIDs in resultados:", resultados['DocID'].unique())
-print("Unique DocNumbers in resultados_esperados:", resultados_esperados['DocNumber'].unique())
-
-precision_recall = calcular_11_pontos_precisao_recall(resultados['Score'], resultados_esperados_bin)
-f1 = calcular_f1(resultados['Score'], resultados_esperados_bin)
-precision5 = calcular_precision_at_k(resultados['Score'], resultados_esperados_bin, 5)
-precision10 = calcular_precision_at_k(resultados['Score'], resultados_esperados_bin, 10)
-r_precision = calcular_r_precision(resultados['Score'], resultados_esperados_bin)
-map_score = calcular_map(resultados['Score'], resultados_esperados_bin)
-mrr = calcular_mrr(resultados['DocID'].values, resultados_esperados['DocNumber'].values)
-dcg = calcular_dcg(resultados['Score'], resultados_esperados_bin)
-ndcg = calcular_ndcg(resultados['Score'], resultados_esperados_bin)
-
-# Imprimir resultados
-print(f"F1 Score: {f1}")
-print(f"Precision@5: {precision5}")
-print(f"Precision@10: {precision10}")
-print(f"R-Precision: {r_precision}")
-print(f"MAP: {map_score}")
-print(f"MRR: {mrr}")
-print(f"DCG: {dcg}")
-print(f"nDCG: {ndcg}")
-
-# Salvar gráficos em .csv e .pdf
-precision_recall_df = pd.DataFrame({
-    'Recall': precision_recall[1],
-    'Precision': precision_recall[0]
-})
-precision_recall_df.to_csv(os.path.join(output_directory, '11_pontos_precisao_recall.csv'), index=False)
-
-plt.plot(precision_recall[1], precision_recall[0], marker='o')
-plt.xlabel('Recall')
-plt.ylabel('Precision')
-plt.title('11-Point Precision-Recall Curve')
-plt.savefig(os.path.join(output_directory, '11_pontos_precisao_recall.pdf'))
-
-# Documentar resultados em RELATORIO.MD
-with open(os.path.join(output_directory, 'RELATORIO.MD'), 'w') as f:
-    f.write(f"# Avaliação do Sistema de Recuperação de Informação\n")
-    f.write(f"## Resultados\n")
-    f.write(f"- **F1 Score:** {f1}\n")
-    f.write(f"- **Precision@5:** {precision5}\n")
-    f.write(f"- **Precision@10:** {precision10}\n")
-    f.write(f"- **R-Precision:** {r_precision}\n")
-    f.write(f"- **MAP:** {map_score}\n")
-    f.write(f"- **MRR:** {mrr}\n")
-    f.write(f"- **DCG:** {dcg}\n")
-    f.write(f"- **nDCG:** {ndcg}\n")
+# Salvando os dados em CSV
+resultados_flat.to_csv(f'RESULTADOS-{stemmer_choice}.csv', index=False, sep=';')

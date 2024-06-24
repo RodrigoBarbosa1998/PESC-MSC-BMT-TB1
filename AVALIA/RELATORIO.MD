@@ -1,4 +1,4 @@
-# Avaliação do Sistema de Recuperação de Informação
+# AvaliaÃ§Ã£o do Sistema de RecuperaÃ§Ã£o de InformaÃ§Ã£o
 ## Resultados
 - **F1 Score:** 0.0
 - **Precision@5:** 1.0
