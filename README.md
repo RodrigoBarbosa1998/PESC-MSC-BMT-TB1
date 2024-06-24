@@ -56,3 +56,35 @@ Cada uma dessas seções corresponde a um módulo do sistema e descreve suas fun
     - `No diretório...\Code> python src/main.py`
 
 - O resultado final, a busca realizada segundo o modelo vetorial, estará no arquivo RESULTADOS.csv no diretório RESULT
+
+## 6) Avaliação do Modelo
+
+A avaliação do modelo é crucial para determinar a eficácia do sistema de recuperação de informação implementado. A seguir estão as métricas principais consideradas:
+
+- **F1 Score:** Combinação de precisão e recall, oferecendo uma medida geral da performance do sistema.
+  
+- **Precision@K:** Precisão dos primeiros K documentos retornados para cada consulta. Aqui, serão avaliados os valores de K=5 e K=10.
+  
+- **R-Precision:** Precisão calculada até o ponto onde o número de documentos relevantes para a consulta é atingido.
+  
+- **MAP (Mean Average Precision):** Média das precisões calculadas para cada consulta, considerando todos os documentos relevantes.
+  
+- **MRR (Mean Reciprocal Rank):** Média do recíproco da posição do primeiro documento relevante encontrado para cada consulta.
+
+### Mudança entre STEMMER e NOSTEMMER
+
+Para comparar o impacto da utilização do stemmer nos resultados, o sistema pode ser configurado para operar em dois modos:
+
+- **STEMMER:** Utiliza um processo de stemming para reduzir as palavras à sua forma raiz.
+- **NOSTEMMER:** Não aplica stemming, mantendo as palavras originais intactas.
+
+Os resultados da avaliação para ambos os modos estarão disponíveis nos respectivos diretórios de resultados: `RESULT_STEMMER` e `RESULT_NOSTEMMER`.
+
+### Localização dos Resultados da Avaliação
+
+Os resultados completos da avaliação do modelo podem ser encontrados nos arquivos em AVALIA:
+
+- `RESULT_STEMMER`: Contém os resultados obtidos utilizando o stemmer.
+- `RESULT_NOSTEMMER`: Contém os resultados obtidos sem o uso do stemmer.
+
+Essas seções adicionais oferecem uma visão detalhada do desempenho do sistema de recuperação de informação em diferentes configurações de processamento de texto.
