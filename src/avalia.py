@@ -135,4 +135,4 @@ else:
     print("Não há dados suficientes para calcular métricas.")
 
 # Salvando os dados em CSV
-resultados_flat.to_csv(f'RESULTADOS-{stemmer_choice}.csv', index=False, sep=';')
+resultados_flat.to_csv(f'AVALIA\\RESULTADOS-{stemmer_choice}.csv', index=False, sep=';')
